@@ -111,7 +111,12 @@ module Rswag
 
           parameters.select { |p| p[:in] == :query }.each_with_index do |p, i|
             path_template.concat(i.zero? ? '?' : '&')
-            path_template.concat(build_query_string_part(p, example.send(p[:name])))
+
+            begin
+              path_template.concat(build_query_string_part(p, example.send(p[:name])))
+            rescue ArgumentError => e
+              raise e unless p[:name].to_s == "options"
+            end
           end
         end
       end
@@ -119,6 +124,7 @@ module Rswag
       def build_query_string_part(param, value)
         name = param[:name]
         type = param[:type] || param.dig(:schema, :type)
+        return {name => value}.to_param if type&.to_sym == :hash
         return "#{name}=#{value}" unless type&.to_sym == :array
 
         case param[:collectionFormat]
@@ -129,7 +135,7 @@ module Rswag
         when :pipes
           "#{name}=#{value.join('|')}"
         when :multi
-          value.map { |v| "#{name}=#{v}" }.join('&')
+          value.map { |v| "#{name}[]=#{v}" }.join('&')
         else
           "#{name}=#{value.join(',')}" # csv is default
         end
